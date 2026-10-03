@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full w-full bg-slate-950 text-slate-100 overflow-hidden">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Rolling Prep Queue</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          animation: {
+            'slide-down': 'slideDown 0.35s ease-in-out',
+            'fade-in': 'fadeIn 0.25s ease-out',
+            'pulse-glow': 'pulseGlow 2s infinite',
+          },
+          keyframes: {
+            slideDown: {
+              '0%': { transform: 'translateY(-20px)', opacity: '0.4' },
+              '100%': { transform: 'translateY(0)', opacity: '1' },
+            },
+            fadeIn: {
+              '0%': { opacity: '0', transform: 'scale(0.98)' },
+              '100%': { opacity: '1', transform: 'scale(1)' },
+            },
+            pulseGlow: {
+              '0%, 100%': { boxShadow: '0 0 15px rgba(16, 185, 129, 0.2)' },
+              '50%': { boxShadow: '0 0 25px rgba(16, 185, 129, 0.4)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Fullscreen reset rules */
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    
+    /* Custom scrollbar styling for compact internal scrolling */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+    
+    .card-transition {
+      transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+  </style>
+</head>
+<body class="w-screen h-screen flex flex-col font-sans bg-slate-950 text-slate-100 select-none antialiased">
+
+  <header class="w-full flex-shrink-0 flex items-center justify-between px-4 sm:px-8 py-4 bg-slate-900/90 border-b border-slate-800/80 backdrop-blur-md">
+    <div class="flex items-center space-x-3">
+      <div class="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+          Rolling Prep Queue
+          <span id="queueCountBadge" class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 font-normal">
+            6 Items
+          </span>
+        </h1>
+        <p class="text-xs sm:text-sm text-slate-400">Tick items off as you prepare to rotate them to the bottom</p>
+      </div>
+    </div>
+
+    <!-- Top Toolbar Controls -->
+    <div class="flex items-center space-x-2">
+      <button id="addItemBtn" title="Add New Item" class="px-3 py-2 text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition-all text-xs sm:text-sm flex items-center gap-1.5 font-medium shadow-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        <span>Add</span>
+      </button>
+      <button id="resetQueueBtn" title="Reset to Default 6 Items" class="px-3 py-2 text-slate-400 hover:text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition-all text-xs sm:text-sm flex items-center gap-1.5 font-medium shadow-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        <span>Reset</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="flex-1 w-full overflow-y-auto px-4 sm:px-8 py-6">
+    <div class="max-w-5xl mx-auto space-y-4" id="queueContainer">
+      <!-- Queue Cards rendered dynamically via JavaScript -->
+    </div>
+  </main>
+
+  <div id="itemModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl animate-fade-in">
+      <h3 id="modalTitle" class="text-lg font-bold text-white mb-4">Edit Prep Item</h3>
+      <div class="space-y-4">
+        <div>
+          <label for="itemInput" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Item Name</label>
+          <input type="text" id="itemInput" placeholder="e.g., Weekly Team Sync Prep" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all">
+        </div>
+      </div>
+      <div class="flex items-center justify-end space-x-3 mt-6">
+        <button id="cancelModalBtn" class="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors">Cancel</button>
+        <button id="saveModalBtn" class="px-5 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-lg transition-all">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Default 6 items preset
+    const DEFAULT_ITEMS = [
+      { id: '1', title: 'Weekly Client Status Update', lastPrepped: null },
+      { id: '2', title: 'Team One-on-One Meetings', lastPrepped: null },
+      { id: '3', title: 'System Backup & Security Check', lastPrepped: null },
+      { id: '4', title: 'Content & Social Schedule', lastPrepped: null },
+      { id: '5', title: 'Financial & Invoice Review', lastPrepped: null },
+      { id: '6', title: 'Equipment & Workspace Cleanup', lastPrepped: null }
+    ];
+
+    // App state
+    let items = [];
+    let editingItemId = null;
+
+    // DOM Elements
+    const queueContainer = document.getElementById('queueContainer');
+    const queueCountBadge = document.getElementById('queueCountBadge');
+    const addItemBtn = document.getElementById('addItemBtn');
+    const resetQueueBtn = document.getElementById('resetQueueBtn');
+    const itemModal = document.getElementById('itemModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const itemInput = document.getElementById('itemInput');
+    const cancelModalBtn = document.getElementById('cancelModalBtn');
+    const saveModalBtn = document.getElementById('saveModalBtn');
+
+    // Storage Key
+    const STORAGE_KEY = 'rolling_prep_queue_items_v2';
+
+    // Format relative time (e.g. "2 hours ago", "Just now")
+    function getRelativeTimeString(timestamp) {
+      if (!timestamp) return 'Never prepped';
+      const now = Date.now();
+      const elapsed = Math.floor((now - timestamp) / 1000); // seconds
+
+      if (elapsed < 30) return 'Just now';
+      if (elapsed < 60) return `${elapsed}s ago`;
+      const minutes = Math.floor(elapsed / 60);
+      if (minutes < 60) return `${minutes}m ago`;
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `${hours}h ago`;
+      const days = Math.floor(hours / 24);
+      if (days < 30) return `${days}d ago`;
+      
+      const date = new Date(timestamp);
+      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    }
+
+    // Load items from localStorage
+    function loadQueue() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          items = JSON.parse(saved);
+        } else {
+          items = [...DEFAULT_ITEMS];
+          saveQueue();
+        }
+      } catch (e) {
+        items = [...DEFAULT_ITEMS];
+      }
+    }
+
+    // Save items to localStorage
+    function saveQueue() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      } catch (e) {
+        console.error('Failed to save state to localStorage', e);
+      }
+    }
+
+    function renderQueue(animatingItemId = null) {
+      queueContainer.innerHTML = '';
+      queueCountBadge.textContent = `${items.length} Item${items.length !== 1 ? 's' : ''}`;
+
+      if (items.length === 0) {
+        queueContainer.innerHTML = `
+          <div class="text-center py-16 border-2 border-dashed border-slate-800 rounded-3xl p-8 max-w-md mx-auto my-12">
+            <p class="text-slate-400 text-base mb-4">Your rolling queue is empty!</p>
+            <button onclick="resetToDefaults()" class="px-5 py-2.5 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-xl text-sm font-semibold hover:bg-emerald-600/30 transition-all">
+              Restore Default Items
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      items.forEach((item, index) => {
+        const isTop = index === 0;
+        const card = document.createElement('div');
+        const isAnimated = item.id === animatingItemId;
+
+        card.className = `card-transition relative border rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+          isTop 
+            ? 'bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950/40 border-emerald-500/50 shadow-2xl shadow-emerald-950/30 ring-1 ring-emerald-500/20 animate-pulse-glow' 
+            : 'bg-slate-900/60 hover:bg-slate-900 border-slate-800 hover:border-slate-700'
+        } ${isAnimated ? 'animate-slide-down' : ''}`;
+
+        // Card HTML Structure
+        card.innerHTML = `
+          <!-- Left Status & Info -->
+          <div class="flex items-start sm:items-center space-x-3.5 flex-1 min-w-0">
+            <!-- Position Indicator -->
+            <div class="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-xl font-bold text-xs sm:text-sm ${
+              isTop 
+                ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20 ring-2 ring-emerald-400/30' 
+                : 'bg-slate-800 text-slate-400 border border-slate-700/50'
+            }">
+              ${isTop ? 'NOW' : `#${index + 1}`}
+            </div>
+
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center space-x-2">
+                <span class="text-base sm:text-lg font-semibold text-white truncate block">
+                  ${escapeHtml(item.title)}
+                </span>
+                ${isTop ? '<span class="text-[10px] sm:text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase tracking-wider">Up Next</span>' : ''}
+              </div>
+              <div class="flex items-center space-x-2 mt-1">
+                <span class="text-xs sm:text-sm text-slate-400 flex items-center gap-1.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  ${getRelativeTimeString(item.lastPrepped)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Action Buttons -->
+          <div class="flex items-center justify-end space-x-2 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-800/80">
+            <!-- Complete/Rotate Button -->
+            <button onclick="rotateItem(${index})" class="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-md ${
+              isTop 
+                ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 active:scale-95 shadow-emerald-500/20' 
+                : 'bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 hover:border-slate-600'
+            }" title="Mark Prepped & Move to Bottom">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+              </svg>
+              <span>${isTop ? 'Mark Prepped' : 'Rotate'}</span>
+            </button>
+
+            <!-- Reorder Controls -->
+            <div class="flex items-center space-x-1 bg-slate-950/80 border border-slate-800 p-1 rounded-xl">
+              <button onclick="moveItem(${index}, -1)" ${index === 0 ? 'disabled class="opacity-30 cursor-not-allowed text-slate-600 p-1.5"' : 'class="p-1.5 text-slate-400 hover:text-white rounded transition-colors"'} title="Move Up">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                </svg>
+              </button>
+              <button onclick="moveItem(${index}, 1)" ${index === items.length - 1 ? 'disabled class="opacity-30 cursor-not-allowed text-slate-600 p-1.5"' : 'class="p-1.5 text-slate-400 hover:text-white rounded transition-colors"'} title="Move Down">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Edit Item -->
+            <button onclick="openEditModal('${item.id}')" class="p-2.5 text-slate-400 hover:text-white bg-slate-950/80 hover:bg-slate-800 border border-slate-800 rounded-xl transition-all" title="Edit Item">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+
+            <!-- Delete Item -->
+            <button onclick="deleteItem('${item.id}')" class="p-2.5 text-slate-500 hover:text-red-400 bg-slate-950/80 hover:bg-slate-800 border border-slate-800 rounded-xl transition-all" title="Delete Item">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
+        `;
+
+        queueContainer.appendChild(card);
+      });
+    }
+
+    // Main action: Complete and rotate to the bottom
+    function rotateItem(index) {
+      if (index < 0 || index >= items.length) return;
+      
+      const itemToRotate = items.splice(index, 1)[0];
+      itemToRotate.lastPrepped = Date.now();
+      items.push(itemToRotate);
+      
+      saveQueue();
+      renderQueue(itemToRotate.id);
+    }
+
+    // Manual Reorder Up / Down
+    function moveItem(index, direction) {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= items.length) return;
+
+      const temp = items[index];
+      items[index] = items[targetIndex];
+      items[targetIndex] = temp;
+
+      saveQueue();
+      renderQueue();
+    }
+
+    // Delete item
+    function deleteItem(id) {
+      items = items.filter(item => item.id !== id);
+      saveQueue();
+      renderQueue();
+    }
+
+    // Reset back to original default 6 items
+    function resetToDefaults() {
+      items = JSON.parse(JSON.stringify(DEFAULT_ITEMS));
+      saveQueue();
+      renderQueue();
+    }
+
+    function openAddModal() {
+      editingItemId = null;
+      modalTitle.textContent = 'Add New Item';
+      itemInput.value = '';
+      itemModal.classList.remove('hidden');
+      itemInput.focus();
+    }
+
+    function openEditModal(id) {
+      const item = items.find(i => i.id === id);
+      if (!item) return;
+
+      editingItemId = id;
+      modalTitle.textContent = 'Edit Item Name';
+      itemInput.value = item.title;
+      itemModal.classList.remove('hidden');
+      itemInput.focus();
+    }
+
+    function closeModal() {
+      itemModal.classList.add('hidden');
+      editingItemId = null;
+      itemInput.value = '';
+    }
+
+    function saveModal() {
+      const val = itemInput.value.trim();
+      if (!val) return;
+
+      if (editingItemId) {
+        // Edit existing
+        const item = items.find(i => i.id === editingItemId);
+        if (item) item.title = val;
+      } else {
+        // Add new
+        items.push({
+          id: Date.now().toString(),
+          title: val,
+          lastPrepped: null
+        });
+      }
+
+      saveQueue();
+      renderQueue();
+      closeModal();
+    }
+
+    // Escape HTML string helper
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    addItemBtn.addEventListener('click', openAddModal);
+    resetQueueBtn.addEventListener('click', () => {
+      if (confirm('Are you sure you want to reset your queue back to the 6 default items?')) {
+        resetToDefaults();
+      }
+    });
+    cancelModalBtn.addEventListener('click', closeModal);
+    saveModalBtn.addEventListener('click', saveModal);
+
+    itemInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') saveModal();
+      if (e.key === 'Escape') closeModal();
+    });
+
+    // Close modal on backdrop click
+    itemModal.addEventListener('click', (e) => {
+      if (e.target === itemModal) closeModal();
+    });
+
+    // Auto-update timestamps every minute
+    setInterval(() => {
+      renderQueue();
+    }, 60000);
+
+    // Initial boot
+    window.onload = function() {
+      loadQueue();
+      renderQueue();
+    };
+  </script>
+</body>
+</html>
